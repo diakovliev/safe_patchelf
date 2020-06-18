@@ -408,7 +408,6 @@ int main(int argc, char** argv) {
     }
 
     args->print();
-    return 0;
 
     FD fd(::open(args->filename, O_RDWR));
     if (fd.bad()) {
