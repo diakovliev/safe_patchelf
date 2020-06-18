@@ -133,11 +133,16 @@ public:
     Elf(void *content)
         : content_(reinterpret_cast<caddr_t>(content))
         , ehdr_(reinterpret_cast<typename Traits::Ehdr*>(content))
+        , phdrs_()
+        , shdrs_()
+        , executable_(false)
     {
-        std::cout << "   class: " << Traits::name << std::endl;
-        std::cout << "endianes: " << (ElfEndian == Little ? "little" : "big") << std::endl;
+        std::cout << "     class: " << Traits::name << std::endl;
+        std::cout << "  endianes: " << (ElfEndian == Little ? "little" : "big") << std::endl;
 
         fill_headers();
+
+        std::cout << "executable: " << executable_ << std::endl;
     }
 
     typename Traits::Shdr* shstrtab() {
@@ -168,13 +173,23 @@ public:
     bool set_soname(const char* new_soname) {
         bool result = false;
 
-        auto dynamic    = reinterpret_cast<typename Traits::Dyn*>(section_data(".dynamic"));
-        if (!dynamic)
+        // Can't set soname for executable
+        if (executable_) {
+            std::cerr << "error: Can't set soname for executable!" << std::endl;
             return result;
+        }
+
+        auto dynamic    = reinterpret_cast<typename Traits::Dyn*>(section_data(".dynamic"));
+        if (!dynamic) {
+            std::cerr << "error: Can't find .dynamic section!" << std::endl;
+            return result;
+        }
 
         auto dynstr     = section_data(".dynstr");
-        if (!dynstr)
+        if (!dynstr) {
+            std::cerr << "error: Can't find .dynstr section!" << std::endl;
             return result;
+        }
 
         char* soname = nullptr;
         for (auto dyn = dynamic; rdi(dyn->d_tag) != DT_NULL; ++dyn) {
@@ -182,6 +197,11 @@ public:
                 soname = dynstr + rdi(dyn->d_un.d_val);
                 break;
             }
+        }
+
+        if (!soname) {
+            std::cerr << "error: Can't find soname record in .dynamic!" << std::endl;
+            return result;
         }
 
         if (new_soname && ::strcmp(new_soname, soname) != 0) {
@@ -192,6 +212,10 @@ public:
             result = true;
         }
 
+        if (!result) {
+            std::cerr << "error: New soname was not set!" << std::endl;
+        }
+
         return result;
     }
 
@@ -199,12 +223,16 @@ public:
         bool result = false;
 
         auto dynamic    = reinterpret_cast<typename Traits::Dyn*>(section_data(".dynamic"));
-        if (!dynamic)
+        if (!dynamic) {
+            std::cerr << "error: Can't find .dynamic section!" << std::endl;
             return result;
+        }
 
         auto dynstr     = section_data(".dynstr");
-        if (!dynstr)
+        if (!dynstr) {
+            std::cerr << "error: Can't find .dynstr section!" << std::endl;
             return result;
+        }
 
         for (auto dyn = dynamic; rdi(dyn->d_tag) != DT_NULL; ++dyn) {
             if (rdi(dyn->d_tag) == DT_NEEDED) {
@@ -222,6 +250,10 @@ public:
                     result = true;
                 });
             }
+        }
+
+        if (!result) {
+            std::cerr << "error: No requested updates in neededs!" << std::endl;
         }
 
         return result;
@@ -243,8 +275,10 @@ protected:
     }
 
     void fill_headers() {
-        for (int i = 0; i < rdi(ehdr_->e_phnum); ++i)
+        for (int i = 0; i < rdi(ehdr_->e_phnum); ++i) {
             phdrs_.push_back(&((typename Traits::Phdr*)(content_ + rdi(ehdr_->e_phoff)))[i]);
+            if (rdi(phdrs_[i]->p_type) == PT_INTERP) executable_ = true;
+        }
 
         for (int i = 0; i < rdi(ehdr_->e_shnum); ++i)
             shdrs_.push_back(&((typename Traits::Shdr*)(content_ + rdi(ehdr_->e_shoff)))[i]);
@@ -255,6 +289,7 @@ private:
     typename Traits::Ehdr* ehdr_;
     std::vector<typename Traits::Phdr*> phdrs_;
     std::vector<typename Traits::Shdr*> shdrs_;
+    bool executable_;
 };
 
 std::pair<ElfClass, Endian> elf_class(caddr_t contents) {
