@@ -272,8 +272,8 @@ std::pair<ElfClass, Endian> elf_class(caddr_t contents) {
 }
 
 struct Args {
-    const char* filename = nullptr;
-    const char* soname = nullptr;
+    std::string filename;
+    std::string soname;
     std::map<std::string, std::string> neededs;
 
     static std::optional<std::pair<std::string, std::string> > parse_needed(const char* n) {
@@ -293,9 +293,9 @@ struct Args {
 
     void print(std::ostream& out = std::cout) const {
         out << "Arguments:" << std::endl;
-        if (filename)
+        if (!filename.empty())
             out << "\tinput file: " << filename << std::endl;
-        if (soname)
+        if (!soname.empty())
             out << "\tnew soname: " << soname << std::endl;
         std::for_each(neededs.begin(), neededs.end(), [&](auto& n) {
             out << "\tnew needed: " << n.first << " -> " << n.second << std::endl;
@@ -380,21 +380,39 @@ struct Args {
             opt = getopt_long(argc, argv, opt_string, long_opts, &long_index);
         }
 
+        if (args.filename.empty()) {
+            std::cerr << "error: No ELF to process!" << std::endl;
+            show_usage(argv[0]);
+            return std::nullopt;
+        }
+
         return args;
     }
+
+    bool have_work() const {
+        if (soname.empty() && neededs.empty())
+            return false;
+
+        return true;
+    }
+
 };
 
 template<ElfClass Class>
 int class_entry(void* content, Endian elf_endian, const Args& args) {
     if (elf_endian == Little) {
         Elf<Class, Little> elf(content);
-        elf.soname(args.soname);
-        elf.needed_list(args.neededs);
+        if (!args.soname.empty())
+            elf.soname(args.soname.c_str());
+        if (!args.neededs.empty())
+            elf.needed_list(args.neededs);
         return 0;
     } else if (elf_endian == Big) {
         Elf<Class, Big> elf(content);
-        elf.soname(args.soname);
-        elf.needed_list(args.neededs);
+        if (!args.soname.empty())
+            elf.soname(args.soname.c_str());
+        if (!args.neededs.empty())
+            elf.needed_list(args.neededs);
         return 0;
     }
     return -1;
@@ -407,9 +425,14 @@ int main(int argc, char** argv) {
         return -1;
     }
 
+    if (!args->have_work()) {
+        std::cerr << "error: Nothing to do!" << std::endl;
+        return -1;
+    }
+
     args->print();
 
-    FD fd(::open(args->filename, O_RDWR));
+    FD fd(::open(args->filename.c_str(), O_RDWR));
     if (fd.bad()) {
         std::cerr << "Can't open " << args->filename << "!" << std::endl;
         return -1;
