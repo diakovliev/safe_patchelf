@@ -67,7 +67,7 @@ template<> struct ElfClassTraits<Elf64> {
     using Ehdr      = Elf64_Ehdr;
     using Phdr      = Elf64_Phdr;
     using Shdr      = Elf64_Shdr;
-    using Dyn       = Elf32_Dyn;
+    using Dyn       = Elf64_Dyn;
 
     using Half      = Elf64_Half;
     using Word      = Elf64_Word;
@@ -282,6 +282,11 @@ protected:
 
         for (int i = 0; i < rdi(ehdr_->e_shnum); ++i)
             shdrs_.push_back(&((typename Traits::Shdr*)(content_ + rdi(ehdr_->e_shoff)))[i]);
+
+        //std::cout << "Sections:" << std::endl;
+        //std::for_each(shdrs_.begin(), shdrs_.end(), [&](auto* shdr) {
+        //    std::cout << "\t" << section_name(shdr) << std::endl;
+        //});
     }
 
 private:
