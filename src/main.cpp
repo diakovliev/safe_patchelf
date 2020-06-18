@@ -165,14 +165,16 @@ public:
     }
 
 
-    const char *soname(const char* new_soname = nullptr) {
+    bool set_soname(const char* new_soname) {
+        bool result = false;
+
         auto dynamic    = reinterpret_cast<typename Traits::Dyn*>(section_data(".dynamic"));
         if (!dynamic)
-            return nullptr;
+            return result;
 
         auto dynstr     = section_data(".dynstr");
         if (!dynstr)
-            return nullptr;
+            return result;
 
         char* soname = nullptr;
         for (auto dyn = dynamic; rdi(dyn->d_tag) != DT_NULL; ++dyn) {
@@ -182,18 +184,19 @@ public:
             }
         }
 
-        if (new_soname) {
+        if (new_soname && ::strcmp(new_soname, soname) != 0) {
             std::cout << "new soname +: " << new_soname << std::endl;
             size_t old_soname_size = ::strlen(soname);
             ::strncpy(soname, new_soname, old_soname_size);
             std::cout << "soname -: " << soname << std::endl;
+            result = true;
         }
 
-        return soname;
+        return result;
     }
 
-    std::vector<const char*> needed_list(const std::map<std::string, std::string>& replacements) {
-        std::vector<const char*> result;
+    bool update_neededs(const std::map<std::string, std::string>& replacements) {
+        bool result = false;
 
         auto dynamic    = reinterpret_cast<typename Traits::Dyn*>(section_data(".dynamic"));
         if (!dynamic)
@@ -207,7 +210,7 @@ public:
             if (rdi(dyn->d_tag) == DT_NEEDED) {
                 char *needed_str = dynstr + rdi(dyn->d_un.d_val);
 
-                std::for_each(replacements.begin(), replacements.end(), [needed_str](auto& it) {
+                std::for_each(replacements.begin(), replacements.end(), [&](auto& it) {
                     if (::strcmp(it.first.c_str(), needed_str) != 0)
                         return;
 
@@ -215,11 +218,12 @@ public:
                     size_t old_needed_size = ::strlen(needed_str);
                     ::strncpy(needed_str, it.second.c_str(), old_needed_size);
                     std::cout << "needed -: " << needed_str << std::endl;
-                });
 
-                result.push_back(needed_str);
+                    result = true;
+                });
             }
         }
+
         return result;
     }
 
@@ -400,22 +404,26 @@ struct Args {
 
 template<ElfClass Class>
 int class_entry(void* content, Endian elf_endian, const Args& args) {
+    bool sucess = true;
+
     if (elf_endian == Little) {
         Elf<Class, Little> elf(content);
         if (!args.soname.empty())
-            elf.soname(args.soname.c_str());
+            sucess &= elf.set_soname(args.soname.c_str());
         if (!args.neededs.empty())
-            elf.needed_list(args.neededs);
-        return 0;
+            sucess &= elf.update_neededs(args.neededs);
     } else if (elf_endian == Big) {
         Elf<Class, Big> elf(content);
         if (!args.soname.empty())
-            elf.soname(args.soname.c_str());
+            sucess &= elf.set_soname(args.soname.c_str());
         if (!args.neededs.empty())
-            elf.needed_list(args.neededs);
-        return 0;
+            sucess &= elf.update_neededs(args.neededs);
     }
-    return -1;
+
+    if (!sucess)
+        return -1;
+    else
+        return 0;
 }
 
 int main(int argc, char** argv) {
