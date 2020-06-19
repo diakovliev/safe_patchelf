@@ -3,11 +3,10 @@ Q:=@
 TOOLCHAIN ?= /usr/bin
 COMPILER ?= g++-8
 
-CC := $(TOOLCHAIN)/$(COMPILER)
-
 INCLUDE_DIRS := -I include
 
 BUILD_VARIANT ?= Release
+USE_CCACHE ?= yes
 
 ifeq (${BUILD_VARIANT},Release)
  DEBUG_CC_FLAGS ?= -O3 -DNDEBUG
@@ -21,8 +20,14 @@ else
  endif
 endif
 
+CPP_FLAGS = -std=c++17 -g -Wall -Wextra ${DEBUG_CC_FLAGS} ${INCLUDE_DIRS}
 
-CC_FLAGS = -std=c++17 -g ${DEBUG_CC_FLAGS} ${INCLUDE_DIRS}
+LD := $(TOOLCHAIN)/$(COMPILER)
+CPP := $(TOOLCHAIN)/$(COMPILER)
+
+ifeq ($(USE_CCACHE),yes)
+ CPP := ccache $(CPP)
+endif
 
 LDLIBS =
 
@@ -46,7 +51,7 @@ build: $(TARGET)
 
 $(TARGET): $(OBJECTS)
 	$(Q)echo LINK $@
-	$(Q)$(CC) $(LDFLAGS) $(LDLIBS) -s $^ -o $@
+	$(Q)$(LD) $(LDFLAGS) $(LDLIBS) -s $^ -o $@
 ifeq ($(STRIP_OUTPUT),yes)
 	$(Q)echo STRIP $@
 	$(Q)strip --strip-unneeded $@
@@ -54,7 +59,7 @@ endif
 
 $(OBJECTS): $(SOURCE_DIR)/%.o: $(SOURCE_DIR)/%.cpp
 	$(Q)echo CPP $^
-	$(Q)$(CC) $(CC_FLAGS) -c $< -o $@
+	$(Q)$(CPP) $(CPP_FLAGS) -c $< -o $@
 
 clean:
 	$(Q)echo RM $(OBJECTS) $(TARGET)
