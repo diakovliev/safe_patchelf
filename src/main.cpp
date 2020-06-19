@@ -89,15 +89,11 @@ int main(int argc, char** argv) {
 
     FD fd(::open(args->filename.c_str(), O_RDWR));
     if (fd.bad()) {
-        std::cerr << "Can't open " << args->filename << "!" << std::endl;
+        std::cerr << "error: Can't open " << args->filename << "!" << std::endl;
         return -1;
     }
 
-    std::cout << "    host: " << GetHostEndian::name << std::endl;
-    std::cout << "    size: " << fd.size()   << std::endl;
-
     caddr_t content = reinterpret_cast<caddr_t>(fd.mmap(0, 0, PROT_READ|PROT_WRITE));
-    std::cout << " content: " << (void*)content << std::endl;
 
     auto el_class = elf_class(content);
     switch(el_class.first) {
@@ -112,7 +108,7 @@ int main(int argc, char** argv) {
     }
     break;
     default:
-        std::cerr << args->filename << ": not an ELF file!";
+        std::cerr << "error: " << args->filename << " not an ELF file!" << std::endl;
         return -1;
     };
 }

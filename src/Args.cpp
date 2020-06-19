@@ -33,7 +33,7 @@ void Args::print(std::ostream& out) const {
 /*static*/ void Args::show_usage(const char *program_name, std::ostream& out) {
     out << "Usage: " << program_name << " <options>"                                  << std::endl;
     out << "Were options are:"                                                        << std::endl;
-    out << "\t-f,--filename: File to patch."                                          << std::endl;
+    out << "\t-f,--filename: File to process."                                        << std::endl;
     out << "\t-s,--soname  : New ELF soname."                                         << std::endl;
     out << "\t-n,--needed  : New ELF needed in format: <old needed>,<new needed>."    << std::endl;
     out << "\t-h,-?        : Show this help message."                                 << std::endl;
@@ -82,7 +82,7 @@ void Args::print(std::ostream& out) const {
     } while (true);
 
     if (args.filename.empty()) {
-        std::cerr << "error: No ELF to process!" << std::endl;
+        std::cerr << "error: No file to process!" << std::endl;
         show_usage(argv[0]);
         return std::nullopt;
     }
