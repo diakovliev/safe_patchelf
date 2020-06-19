@@ -1,5 +1,7 @@
 Q:=@
 
+TARGET := safe_patchelf
+
 TOOLCHAIN ?= /usr/bin
 COMPILER ?= g++-8
 
@@ -35,12 +37,19 @@ LDFLAGS =
 
 SOURCE_DIR := src
 
+HEADERS := \
+	include/elf/elf.h \
+	include/$(TARGET)/commons.h \
+	include/$(TARGET)/FD.h \
+	include/$(TARGET)/Args.h \
+	include/$(TARGET)/Elf.h \
+
+
 MODULES := \
 	FD \
 	Args \
 	main \
 
-TARGET := safe_patchelf
 
 SOURCES := $(foreach module,$(MODULES),$(SOURCE_DIR)/$(module).cpp)
 OBJECTS := $(foreach module,$(MODULES),$(SOURCE_DIR)/$(module).o)
@@ -57,8 +66,8 @@ ifeq ($(STRIP_OUTPUT),yes)
 	$(Q)strip --strip-unneeded $@
 endif
 
-$(OBJECTS): $(SOURCE_DIR)/%.o: $(SOURCE_DIR)/%.cpp
-	$(Q)echo CPP $^
+$(OBJECTS): $(SOURCE_DIR)/%.o: $(SOURCE_DIR)/%.cpp $(HEADERS)
+	$(Q)echo CPP $<
 	$(Q)$(CPP) $(CPP_FLAGS) -c $< -o $@
 
 clean:

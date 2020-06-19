@@ -128,6 +128,9 @@ public:
         auto dynamic    = dsects->first;
         auto dynstr     = dsects->second;
 
+        bool updates_result  = true;
+        bool has_updates     = false;
+
         for (auto dyn = dynamic; rdi(dyn->d_tag) != DT_NULL; ++dyn) {
             if (rdi(dyn->d_tag) == DT_NEEDED) {
                 char *needed_str = dynstr + rdi(dyn->d_un.d_val);
@@ -163,13 +166,21 @@ public:
                         warning(msg.str());
                     }
 
-                    if (!has_error)
+                    if (!has_error) {
                         ::strncpy(needed_str, it.second.c_str(), old_needed_size);
+                        has_updates = true;
+                    }
 
-                    result = has_error;
+                    updates_result &= has_error;
                 });
             }
         }
+
+        if (!has_updates) {
+            error("Where no updates in needed!");
+        }
+
+        result = updates_result & has_updates;
 
         return result;
     }
