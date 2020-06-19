@@ -51,62 +51,35 @@ void Args::print(std::ostream& out) const {
         { NULL,         no_argument,        NULL, 0 }
     };
 
-    int long_index = 0;
+    int opt = -1;
+    int long_index = -1;
 
-    int opt = getopt_long(argc, argv, opt_string, long_opts, &long_index);
-    while( opt != -1 ) {
-        switch(opt) {
-        case 'f':
+    do {
+
+        opt = getopt_long(argc, argv, opt_string, long_opts, &long_index);
+        if (opt == -1)
+            break;
+
+        if (opt == 'f' || (opt == 0 && long_index == 0)) {
             args.filename = optarg;
-        break;
-        case 's':
+        } else if (opt == 's' || (opt == 0 && long_index == 1)) {
             args.soname = optarg;
-        break;
-        case 'n':
-        {
+        } else if (opt == 'n' || (opt == 0 && long_index == 2)) {
             auto n = parse_needed(optarg);
             if (!n) {
                 std::cerr << "error: Wrong needed replacement option: " << optarg << std::endl;
                 return std::nullopt;
             }
             args.neededs.insert(*n);
-        }
-        break;
-        case 0:
-            {
-                switch(long_index) {
-                case 0:
-                    args.filename = optarg;
-                break;
-                case 1:
-                    args.soname = optarg;
-                break;
-                case 2:
-                case 'n':
-                {
-                    auto n = parse_needed(optarg);
-                    if (!n) {
-                        std::cerr << "error: Wrong needed replacement option: " << optarg << std::endl;
-                        return std::nullopt;
-                    }
-                    args.neededs.insert(*n);
-                }
-                break;
-                default:
-                    show_usage(argv[0]);
-                    return std::nullopt;
-                }
-            }
-            break;
-        case 'h':
-        case '?':
-        default:
+        //} else if (opt == 'h' || opt == '?') {
+        //    show_usage(argv[0]);
+        //    return std::nullopt;
+        } else {
             show_usage(argv[0]);
             return std::nullopt;
-        };
+        }
 
-        opt = getopt_long(argc, argv, opt_string, long_opts, &long_index);
-    }
+    } while (true);
 
     if (args.filename.empty()) {
         std::cerr << "error: No ELF to process!" << std::endl;

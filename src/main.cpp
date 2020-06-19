@@ -56,12 +56,12 @@ int main(int argc, char** argv) {
         return -1;
     }
 
+    args->print();
+
     if (!args->have_work()) {
         std::cerr << "error: Nothing to do!" << std::endl;
         return -1;
     }
-
-    args->print();
 
     FD fd(::open(args->filename.c_str(), O_RDWR));
     if (fd.bad()) {
