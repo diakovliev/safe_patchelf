@@ -7,10 +7,22 @@ CC := $(TOOLCHAIN)/$(COMPILER)
 
 INCLUDE_DIRS := -I include
 
-# DEBUG_CC_FLAGS ?= -O0 -g
-DEBUG_CC_FLAGS ?= -O3
+BUILD_VARIANT ?= Release
 
-CC_FLAGS = -std=c++17 ${DEBUG_CC_FLAGS} ${INCLUDE_DIRS}
+ifeq (${BUILD_VARIANT},Release)
+ DEBUG_CC_FLAGS ?= -O3 -DNDEBUG
+ STRIP_OUTPUT ?= yes
+else
+ ifeq (${BUILD_VARIANT},Debug)
+  DEBUG_CC_FLAGS ?= -O0 -DDEBUG
+  STRIP_OUTPUT ?= no
+ else
+  $(error Unknown BUILD_VARIANT: $(BUILD_VARIANT)!)
+ endif
+endif
+
+
+CC_FLAGS = -std=c++17 -g ${DEBUG_CC_FLAGS} ${INCLUDE_DIRS}
 
 LDLIBS =
 
@@ -35,6 +47,10 @@ build: $(TARGET)
 $(TARGET): $(OBJECTS)
 	$(Q)echo LINK $@
 	$(Q)$(CC) $(LDFLAGS) $(LDLIBS) -s $^ -o $@
+ifeq ($(STRIP_OUTPUT),yes)
+	$(Q)echo STRIP $@
+	$(Q)strip --strip-unneeded $@
+endif
 
 $(OBJECTS): $(SOURCE_DIR)/%.o: $(SOURCE_DIR)/%.cpp
 	$(Q)echo CPP $^
