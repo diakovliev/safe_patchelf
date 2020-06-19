@@ -47,10 +47,11 @@ int class_entry(void* content, Endian elf_endian, const Args& args) {
         success = Worker::entry(elf, args);
     }
 
-    if (!success)
+    if (!success) {
         return -1;
-    else
+    } else {
         return 0;
+    }
 }
 
 

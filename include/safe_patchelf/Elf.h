@@ -81,6 +81,11 @@ public:
             return result;
         }
 
+        if (new_soname && strcmp(new_soname, soname) == 0) {
+            error("New soname is equal to original.");
+            return result;
+        }
+
         if (new_soname && ::strcmp(new_soname, soname) != 0) {
             size_t old_soname_size = ::strlen(soname);
             size_t new_soname_size = ::strlen(new_soname);
@@ -112,7 +117,7 @@ public:
             if (!has_error)
                 ::strncpy(soname, new_soname, old_soname_size);
 
-            result = has_error;
+            result = !has_error;
         }
 
         return result;
@@ -171,7 +176,7 @@ public:
                         has_updates = true;
                     }
 
-                    updates_result &= has_error;
+                    updates_result &= !has_error;
                 });
             }
         }
