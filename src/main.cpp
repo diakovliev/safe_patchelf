@@ -19,6 +19,15 @@ struct DoElfPatching {
         if (!args.neededs.empty())
             success &= elf.update_neededs(args.neededs);
 
+        if (!elf.results().empty()) {
+            std::for_each(elf.results().begin(), elf.results().end(), [](auto& it) {
+                if (it.first)
+                    std::cerr << it.second << std::endl;
+                else
+                    std::cout << it.second << std::endl;
+            });
+        }
+
         return success;
     }
 };

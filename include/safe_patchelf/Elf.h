@@ -1,8 +1,9 @@
 #pragma once
 
-#include <iostream>
-#include <fstream>
+#include <sstream>
 #include <vector>
+#include <list>
+#include <map>
 #include <optional>
 #include <algorithm>
 
@@ -14,6 +15,7 @@ template<ElfClass Class, Endian ElfEndian, Endian HostEndian = GetHostEndian::en
 class Elf {
 public:
     using Traits = ElfClassTraits<Class>;
+    using Results = std::list<std::pair<bool, std::string> >;
 
     Elf(void *content)
         : content_(reinterpret_cast<caddr_t>(content))
@@ -22,12 +24,7 @@ public:
         , shdrs_()
         , executable_(false)
     {
-        std::cout << "     class: " << Traits::name << std::endl;
-        std::cout << "  endianes: " << (ElfEndian == Little ? "little" : "big") << std::endl;
-
         fill_headers();
-
-        std::cout << "executable: " << executable_ << std::endl;
     }
 
     typename Traits::Shdr* shstrtab() {
@@ -60,21 +57,16 @@ public:
 
         // Can't set soname for executable
         if (executable_) {
-            std::cerr << "error: Can't set soname for executable!" << std::endl;
+            error("Can't set soname for executable!");
             return result;
         }
 
-        auto dynamic    = reinterpret_cast<typename Traits::Dyn*>(section_data(".dynamic"));
-        if (!dynamic) {
-            std::cerr << "error: Can't find .dynamic section!" << std::endl;
+        auto dsects = get_dynamic_sections();
+        if (!dsects)
             return result;
-        }
 
-        auto dynstr     = section_data(".dynstr");
-        if (!dynstr) {
-            std::cerr << "error: Can't find .dynstr section!" << std::endl;
-            return result;
-        }
+        auto dynamic    = dsects->first;
+        auto dynstr     = dsects->second;
 
         char* soname = nullptr;
         for (auto dyn = dynamic; rdi(dyn->d_tag) != DT_NULL; ++dyn) {
@@ -85,20 +77,42 @@ public:
         }
 
         if (!soname) {
-            std::cerr << "error: Can't find soname record in .dynamic!" << std::endl;
+            error("Can't find soname record in .dynamic section!");
             return result;
         }
 
         if (new_soname && ::strcmp(new_soname, soname) != 0) {
-            std::cout << "new soname +: " << new_soname << std::endl;
             size_t old_soname_size = ::strlen(soname);
-            ::strncpy(soname, new_soname, old_soname_size);
-            std::cout << "soname -: " << soname << std::endl;
-            result = true;
-        }
+            size_t new_soname_size = ::strlen(new_soname);
 
-        if (!result) {
-            std::cerr << "error: New soname was not set!" << std::endl;
+            bool has_error = false;
+            if (new_soname_size > old_soname_size) {
+                std::ostringstream msg;
+                msg << "New soname string size ("
+                    << "'" << new_soname << "' size: "
+                    << new_soname_size
+                    << " bytes) has greater size than existing ("
+                    << "'" << soname << "' size: "
+                    << old_soname_size
+                    << " bytes).";
+                error(msg.str());
+                has_error = true;
+            } else if (new_soname_size < old_soname_size) {
+                std::ostringstream msg;
+                msg << "New soname string size ("
+                    << "'" << new_soname << "' size: "
+                    << new_soname_size
+                    << " bytes) has smaller size than existing ("
+                    << "'" << soname << "' size: "
+                    << old_soname_size
+                    << " bytes).";
+                warning(msg.str());
+            }
+
+            if (!has_error)
+                ::strncpy(soname, new_soname, old_soname_size);
+
+            result = has_error;
         }
 
         return result;
@@ -107,17 +121,12 @@ public:
     bool update_neededs(const std::map<std::string, std::string>& replacements) {
         bool result = false;
 
-        auto dynamic    = reinterpret_cast<typename Traits::Dyn*>(section_data(".dynamic"));
-        if (!dynamic) {
-            std::cerr << "error: Can't find .dynamic section!" << std::endl;
+        auto dsects = get_dynamic_sections();
+        if (!dsects)
             return result;
-        }
 
-        auto dynstr     = section_data(".dynstr");
-        if (!dynstr) {
-            std::cerr << "error: Can't find .dynstr section!" << std::endl;
-            return result;
-        }
+        auto dynamic    = dsects->first;
+        auto dynstr     = dsects->second;
 
         for (auto dyn = dynamic; rdi(dyn->d_tag) != DT_NULL; ++dyn) {
             if (rdi(dyn->d_tag) == DT_NEEDED) {
@@ -127,24 +136,73 @@ public:
                     if (::strcmp(it.first.c_str(), needed_str) != 0)
                         return;
 
-                    std::cout << "new needed +: " << it.second << std::endl;
                     size_t old_needed_size = ::strlen(needed_str);
-                    ::strncpy(needed_str, it.second.c_str(), old_needed_size);
-                    std::cout << "needed -: " << needed_str << std::endl;
+                    size_t new_needed_size = ::strlen(it.second.c_str());
 
-                    result = true;
+                    bool has_error = false;
+                    if (new_needed_size > old_needed_size) {
+                        std::ostringstream msg;
+                        msg << "New needed string size ("
+                            << "'" << it.second << "' size: "
+                            << new_needed_size
+                            << " bytes) has greater size than existing ("
+                            << "'" << needed_str << "' size: "
+                            << old_needed_size
+                            << " bytes).";
+                        error(msg.str());
+                        has_error = true;
+                    } else if (new_needed_size < old_needed_size) {
+                        std::ostringstream msg;
+                        msg << "New needed string size ("
+                            << "'" << it.second << "' size: "
+                            << new_needed_size
+                            << " bytes) has smaller size than existing ("
+                            << "'" << needed_str << "' size: "
+                            << old_needed_size
+                            << " bytes).";
+                        warning(msg.str());
+                    }
+
+                    if (!has_error)
+                        ::strncpy(needed_str, it.second.c_str(), old_needed_size);
+
+                    result = has_error;
                 });
             }
-        }
-
-        if (!result) {
-            std::cerr << "error: No requested updates in neededs!" << std::endl;
         }
 
         return result;
     }
 
+    const Results& results() const {
+        return results_;
+    }
+
 protected:
+
+    std::optional<std::pair<typename Traits::Dyn*, caddr_t> > get_dynamic_sections() {
+        auto dynamic    = reinterpret_cast<typename Traits::Dyn*>(section_data(".dynamic"));
+        if (!dynamic) {
+            error("Can't find .dynamic section!");
+            return std::nullopt;
+        }
+
+        auto dynstr     = section_data(".dynstr");
+        if (!dynstr) {
+            error("Can't find .dynstr section!");
+            return std::nullopt;
+        }
+
+        return std::make_pair(dynamic, dynstr);
+    }
+
+    void warning(std::string message) const {
+        results_.push_back(std::make_pair(false, std::string("warning: ") + std::move(message)));
+    }
+
+    void error(std::string message) const {
+        results_.push_back(std::make_pair(true, std::string("error: ") + std::move(message)));
+    }
 
     template<typename T>
     T rdi(T elf_val) {
@@ -160,18 +218,16 @@ protected:
     }
 
     void fill_headers() {
+
+        phdrs_.reserve(rdi(ehdr_->e_phnum));
         for (int i = 0; i < rdi(ehdr_->e_phnum); ++i) {
             phdrs_.push_back(&((typename Traits::Phdr*)(content_ + rdi(ehdr_->e_phoff)))[i]);
             if (rdi(phdrs_[i]->p_type) == PT_INTERP) executable_ = true;
         }
 
+        shdrs_.reserve(rdi(ehdr_->e_shnum));
         for (int i = 0; i < rdi(ehdr_->e_shnum); ++i)
             shdrs_.push_back(&((typename Traits::Shdr*)(content_ + rdi(ehdr_->e_shoff)))[i]);
-
-        //std::cout << "Sections:" << std::endl;
-        //std::for_each(shdrs_.begin(), shdrs_.end(), [&](auto* shdr) {
-        //    std::cout << "\t" << section_name(shdr) << std::endl;
-        //});
     }
 
 private:
@@ -180,4 +236,6 @@ private:
     std::vector<typename Traits::Phdr*> phdrs_;
     std::vector<typename Traits::Shdr*> shdrs_;
     bool executable_;
+
+    mutable Results results_;
 };
