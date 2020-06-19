@@ -1,0 +1,2 @@
+src/*.o
+safe_patchelf
