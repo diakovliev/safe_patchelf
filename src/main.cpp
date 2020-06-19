@@ -7,6 +7,44 @@
 #include <safe_patchelf/Elf.h>
 #include <safe_patchelf/Args.h>
 
+
+struct DoElfPatching {
+    template<class E>
+    static bool entry(E& elf, const Args& args) {
+        bool success = true;
+
+        if (!args.soname.empty())
+            success &= elf.set_soname(args.soname.c_str());
+
+        if (!args.neededs.empty())
+            success &= elf.update_neededs(args.neededs);
+
+        return success;
+    }
+};
+
+
+template<ElfClass Class, class Worker>
+int class_entry(void* content, Endian elf_endian, const Args& args) {
+    bool success = false;
+
+    if (elf_endian == Little) {
+        using LElf = Elf<Class, Little>;
+        LElf elf(content);
+        success = Worker::entry(elf, args);
+    } else if (elf_endian == Big) {
+        using BElf = Elf<Class, Big>;
+        BElf elf(content);
+        success = Worker::entry(elf, args);
+    }
+
+    if (!success)
+        return -1;
+    else
+        return 0;
+}
+
+
 std::pair<ElfClass, Endian> elf_class(caddr_t contents) {
     if (::memcmp(contents, ELFMAG, SELFMAG) != 0)
         return std::make_pair(None, Unknown);
@@ -25,29 +63,6 @@ std::pair<ElfClass, Endian> elf_class(caddr_t contents) {
     return std::make_pair(None, Unknown);
 }
 
-template<ElfClass Class>
-int class_entry(void* content, Endian elf_endian, const Args& args) {
-    bool sucess = true;
-
-    if (elf_endian == Little) {
-        Elf<Class, Little> elf(content);
-        if (!args.soname.empty())
-            sucess &= elf.set_soname(args.soname.c_str());
-        if (!args.neededs.empty())
-            sucess &= elf.update_neededs(args.neededs);
-    } else if (elf_endian == Big) {
-        Elf<Class, Big> elf(content);
-        if (!args.soname.empty())
-            sucess &= elf.set_soname(args.soname.c_str());
-        if (!args.neededs.empty())
-            sucess &= elf.update_neededs(args.neededs);
-    }
-
-    if (!sucess)
-        return -1;
-    else
-        return 0;
-}
 
 int main(int argc, char** argv) {
 
@@ -79,12 +94,12 @@ int main(int argc, char** argv) {
     switch(el_class.first) {
     case Elf32:
     {
-        return class_entry<Elf32>(content, el_class.second, *args);
+        return class_entry<Elf32, DoElfPatching>(content, el_class.second, *args);
     }
     break;
     case Elf64:
     {
-        return class_entry<Elf64>(content, el_class.second, *args);
+        return class_entry<Elf64, DoElfPatching>(content, el_class.second, *args);
     }
     break;
     default:
