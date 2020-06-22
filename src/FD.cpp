@@ -22,7 +22,7 @@ FD::~FD() {
 }
 
 void FD::close() {
-    if (!bad()) return;
+    if (bad()) return;
     std::for_each(maps_.begin(), maps_.end(), [](auto& it) { ::munmap(it.first, it.second); });
     maps_.clear();
     ::close(fd_);
